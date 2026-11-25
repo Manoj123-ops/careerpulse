@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import healthHandler from './api/health.js';
+import authHandler from './api/auth.js';
+import publicPortfolioHandler from './api/public-portfolio.js';
 import stateHandler from './api/state.js';
 import vacanciesHandler from './api/vacancies.js';
 import tailoredCvHandler from './api/tailored-cv.js';
@@ -12,6 +15,8 @@ import sendEmailHandler from './api/send-email.js';
 
 const API_ROUTES = {
   '/api/health': healthHandler,
+  '/api/auth': authHandler,
+  '/api/public-portfolio': publicPortfolioHandler,
   '/api/state': stateHandler,
   '/api/vacancies': vacanciesHandler,
   '/api/tailored-cv': tailoredCvHandler,
@@ -83,7 +88,7 @@ function localApiPlugin() {
 }
 
 export default defineConfig({
-  plugins: [react(), localApiPlugin()],
+  plugins: [react(), tailwindcss(), localApiPlugin()],
   server: {
     port: 5173,
   },

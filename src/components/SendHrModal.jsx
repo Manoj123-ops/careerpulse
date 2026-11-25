@@ -215,7 +215,7 @@ export default function SendHrModal({
 
           <div
             style={{
-              background: '#f8fafc',
+              background: 'rgba(255, 255, 255, 0.04)',
               border: '1px solid var(--border)',
               borderRadius: 10,
               padding: '10px 14px',
@@ -227,7 +227,7 @@ export default function SendHrModal({
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
-              <Paperclip size={15} color="#2563eb" />
+              <Paperclip size={15} color="#ff8a1e" />
               <span>
                 Attached Resume: <strong className="mono">{pdfFilename}</strong>
               </span>
@@ -251,12 +251,12 @@ export default function SendHrModal({
           {!smtpConfig?.smtpUser && (
             <div
               style={{
-                background: '#fffbeb',
-                border: '1px solid #fde68a',
+                background: 'rgba(255, 138, 30, 0.12)',
+                border: '1px solid rgba(255, 138, 30, 0.35)',
                 borderRadius: 8,
                 padding: '9px 12px',
                 fontSize: 12,
-                color: '#92400e',
+                color: '#fdba74',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',

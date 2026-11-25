@@ -270,7 +270,7 @@ export async function askJobAssistant({ apiKey, modelId, question, history, cv, 
   const applied = vacancies.filter((v) => ['Applied', 'Interview', 'Offer'].includes(v.status));
   const walkIns = vacancies.filter((v) => v.interviewType === 'walk-in');
 
-  const systemContext = `You are CareerPulse AI, Manoj Kumar PR's personal Job & Career Assistant.
+  const systemContext = `You are Manoj Kumar Portal AI, Manoj Kumar PR's personal Job & Career Assistant.
 Be specific, practical, data-driven, and reference the actual vacancies and CV data below.
 
 CANDIDATE CV SUMMARY:

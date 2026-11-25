@@ -20,7 +20,7 @@ export default function JobAssistantChat({
 }) {
   const welcomeMessage = {
     role: 'assistant',
-    text: `Hi ${cv.fullName.split(' ')[0]}! I am your CareerPulse AI Job Assistant. I have full context of your CV (B.E. ISE 2026, Dyashin Data Analytics internship, VTU React & Cybersecurity Elite Gold, ML & MySQL projects) and all ${vacancies.length} tracked vacancies. Ask me anything about interview prep, walk-in strategies, HR outreach, or skill gaps!`,
+    text: `Hi ${cv.fullName.split(' ')[0]}! I am your Manoj Kumar Portal AI Job Assistant. I have full context of your CV (B.E. ISE 2026, Dyashin Data Analytics internship, VTU React & Cybersecurity Elite Gold, ML & MySQL projects) and all ${vacancies.length} tracked vacancies. Ask me anything about interview prep, walk-in strategies, HR outreach, or skill gaps!`,
   };
 
   const [messages, setMessages] = useState(
@@ -80,7 +80,7 @@ export default function JobAssistantChat({
     <div className="card" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 180px)', minHeight: 520 }}>
       <div className="card-header">
         <h3 className="card-title">
-          <Bot size={18} color="#4f46e5" /> CareerPulse AI Job Assistant & Interview Coach
+          <Bot size={18} color="#e50914" /> Manoj Kumar Portal AI Job Assistant &amp; Interview Coach
         </h3>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <span className="badge badge-blue mono">Model: {selectedModel}</span>
@@ -98,7 +98,7 @@ export default function JobAssistantChat({
             onClick={() => sendQuestion(qp)}
             disabled={loading}
           >
-            <Sparkles size={11} color="#4f46e5" /> {qp}
+            <Sparkles size={11} color="#ff8a1e" /> {qp}
           </button>
         ))}
       </div>
@@ -121,8 +121,9 @@ export default function JobAssistantChat({
                     width: 32,
                     height: 32,
                     borderRadius: 9,
-                    background: '#eef2ff',
-                    color: '#4f46e5',
+                    background: 'rgba(168, 85, 247, 0.18)',
+                    border: '1px solid rgba(168, 85, 247, 0.4)',
+                    color: '#d8b4fe',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -153,8 +154,9 @@ export default function JobAssistantChat({
                     width: 32,
                     height: 32,
                     borderRadius: 9,
-                    background: '#dbeafe',
-                    color: '#1d4ed8',
+                    background: 'rgba(229, 9, 20, 0.22)',
+                    border: '1px solid rgba(229, 9, 20, 0.45)',
+                    color: '#fda4af',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',

@@ -91,7 +91,7 @@ export default function VacancyTable({
     return (
       <div className="card">
         <div className="card-body" style={{ textAlign: 'center', padding: '44px 20px', color: 'var(--text-soft)' }}>
-          <Sparkles size={32} color="#2563eb" style={{ marginBottom: 10 }} />
+          <Sparkles size={32} color="#e50914" style={{ marginBottom: 10 }} />
           <h3 style={{ margin: '0 0 6px', color: 'var(--text)', fontSize: 16 }}>
             No Vacancies Uploaded Yet
           </h3>
@@ -175,7 +175,7 @@ export default function VacancyTable({
 
                     {/* Package (LPA) */}
                     <td>
-                      <div style={{ fontWeight: 700, fontSize: 13.5, color: '#065f46' }}>{v.packageLpa}</div>
+                      <div style={{ fontWeight: 700, fontSize: 13.5, color: '#6ee7b7' }}>{v.packageLpa}</div>
                       {v.postedOrDeadline && (
                         <div style={{ fontSize: 11, color: 'var(--text-soft)', marginTop: 4 }}>
                           {v.postedOrDeadline}
@@ -188,8 +188,8 @@ export default function VacancyTable({
                       {isWalkIn ? (
                         <div
                           style={{
-                            background: '#fffbeb',
-                            border: '1px solid #fde68a',
+                            background: 'rgba(255, 138, 30, 0.1)',
+                            border: '1px solid rgba(255, 138, 30, 0.35)',
                             borderRadius: 8,
                             padding: '8px 10px',
                           }}
@@ -199,7 +199,7 @@ export default function VacancyTable({
                               <Clock size={11} /> WALK-IN INTERVIEW
                             </span>
                           </div>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: '#78350f', lineHeight: 1.4 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: '#fde68a', lineHeight: 1.4 }}>
                             {v.walkInTimings || 'Walk-in timings not specified in notice'}
                           </div>
                           {v.applyLink && (
@@ -224,8 +224,8 @@ export default function VacancyTable({
                       ) : (
                         <div
                           style={{
-                            background: '#eff6ff',
-                            border: '1px solid #bfdbfe',
+                            background: 'rgba(229, 9, 20, 0.08)',
+                            border: '1px solid rgba(229, 9, 20, 0.3)',
                             borderRadius: 8,
                             padding: '8px 10px',
                           }}
@@ -416,7 +416,7 @@ export default function VacancyTable({
 
                   {isExpanded && (
                     <tr>
-                      <td colSpan={6} style={{ background: '#f8fafc', padding: '14px 18px' }}>
+                      <td colSpan={6} style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '14px 18px' }}>
                         <div className="grid-2">
                           <div>
                             <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 6 }}>
@@ -447,7 +447,7 @@ export default function VacancyTable({
                               Skill Match Breakdown
                             </div>
                             <div style={{ marginBottom: 8 }}>
-                              <span style={{ fontSize: 11.5, fontWeight: 600, color: '#065f46' }}>Matched: </span>
+                              <span style={{ fontSize: 11.5, fontWeight: 600, color: '#6ee7b7' }}>Matched: </span>
                               {(v.matchedSkills?.length ? v.matchedSkills : v.requiredSkills || []).map((s, i) => (
                                 <span key={i} className="badge badge-green" style={{ margin: '2px 4px 2px 0' }}>
                                   {s}
@@ -456,7 +456,7 @@ export default function VacancyTable({
                             </div>
                             {v.missingSkills?.length > 0 && (
                               <div>
-                                <span style={{ fontSize: 11.5, fontWeight: 600, color: '#92400e' }}>Gap / Brush-up: </span>
+                                <span style={{ fontSize: 11.5, fontWeight: 600, color: '#fdba74' }}>Gap / Brush-up: </span>
                                 {v.missingSkills.map((s, i) => (
                                   <span key={i} className="badge badge-amber" style={{ margin: '2px 4px 2px 0' }}>
                                     {s}

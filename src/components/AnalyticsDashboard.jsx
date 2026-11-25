@@ -8,9 +8,17 @@ import {
   Award,
   Send,
   AlertTriangle,
+  Users,
+  Heart,
 } from 'lucide-react';
 
-export default function AnalyticsDashboard({ vacancies, tailoredMap, applicationLogs }) {
+export default function AnalyticsDashboard({
+  vacancies,
+  tailoredMap,
+  applicationLogs,
+  portfolioVisitors = [],
+  portfolioStats = { totalVisitors: 0, totalLikes: 0 },
+}) {
   const totalAnalyzed = vacancies.length;
   const appliedList = vacancies.filter((v) => ['Applied', 'Interview', 'Offer'].includes(v.status));
   const appliedCount = appliedList.length;
@@ -64,12 +72,12 @@ export default function AnalyticsDashboard({ vacancies, tailoredMap, application
         <div className="kpi-card">
           <div>
             <div className="kpi-label">Companies Applied</div>
-            <div className="kpi-value" style={{ color: '#2563eb' }}>{appliedCount}</div>
+            <div className="kpi-value" style={{ color: '#ff4d5a' }}>{appliedCount}</div>
             <div className="kpi-sub">
               {totalAnalyzed ? `${Math.round((appliedCount / totalAnalyzed) * 100)}% of tracked vacancies` : 'Start applying'}
             </div>
           </div>
-          <div className="kpi-icon" style={{ background: '#dbeafe', color: '#1d4ed8' }}>
+          <div className="kpi-icon" style={{ background: 'rgba(229, 9, 20, 0.18)', color: '#fda4af' }}>
             <Send size={19} />
           </div>
         </div>
@@ -80,7 +88,7 @@ export default function AnalyticsDashboard({ vacancies, tailoredMap, application
             <div className="kpi-value">{totalAnalyzed}</div>
             <div className="kpi-sub">{walkInCount} Walk-In • {onlineCount} Online</div>
           </div>
-          <div className="kpi-icon" style={{ background: '#ede9fe', color: '#5b21b6' }}>
+          <div className="kpi-icon" style={{ background: 'rgba(168, 85, 247, 0.18)', color: '#d8b4fe' }}>
             <Briefcase size={19} />
           </div>
         </div>
@@ -88,10 +96,10 @@ export default function AnalyticsDashboard({ vacancies, tailoredMap, application
         <div className="kpi-card">
           <div>
             <div className="kpi-label">Package Benchmark</div>
-            <div className="kpi-value" style={{ color: '#059669' }}>{avgLpa} LPA</div>
+            <div className="kpi-value" style={{ color: '#34d399' }}>{avgLpa} LPA</div>
             <div className="kpi-sub">Peak: {maxLpa} LPA • Applied Avg: {avgAppliedLpa} LPA</div>
           </div>
-          <div className="kpi-icon" style={{ background: '#d1fae5', color: '#047857' }}>
+          <div className="kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.18)', color: '#6ee7b7' }}>
             <TrendingUp size={19} />
           </div>
         </div>
@@ -99,12 +107,12 @@ export default function AnalyticsDashboard({ vacancies, tailoredMap, application
         <div className="kpi-card">
           <div>
             <div className="kpi-label">Interviews & Offers</div>
-            <div className="kpi-value" style={{ color: '#d97706' }}>
+            <div className="kpi-value" style={{ color: '#ff8a1e' }}>
               {interviewCount} / {offerCount}
             </div>
             <div className="kpi-sub">Avg CV Fit: {avgMatch}% • {tailoredCount} CVs tailored</div>
           </div>
-          <div className="kpi-icon" style={{ background: '#fef3c7', color: '#b45309' }}>
+          <div className="kpi-icon" style={{ background: 'rgba(255, 138, 30, 0.18)', color: '#fdba74' }}>
             <Award size={19} />
           </div>
         </div>
@@ -115,7 +123,7 @@ export default function AnalyticsDashboard({ vacancies, tailoredMap, application
         <div className="card">
           <div className="card-header">
             <h3 className="card-title">
-              <BarChart3 size={17} color="#2563eb" /> Application Conversion Funnel
+              <BarChart3 size={17} color="#e50914" /> Application Conversion Funnel
             </h3>
           </div>
           <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
@@ -127,7 +135,7 @@ export default function AnalyticsDashboard({ vacancies, tailoredMap, application
                     <span style={{ fontWeight: 600 }}>{stage.label}</span>
                     <span style={{ fontWeight: 700 }}>{stage.count}</span>
                   </div>
-                  <div style={{ height: 10, borderRadius: 999, background: '#f1f5f9', overflow: 'hidden' }}>
+                  <div style={{ height: 10, borderRadius: 999, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
                     <div
                       style={{
                         width: `${Math.max(stage.count ? 6 : 0, pct)}%`,
@@ -203,7 +211,7 @@ export default function AnalyticsDashboard({ vacancies, tailoredMap, application
                     <tr key={v.id}>
                       <td style={{ fontWeight: 700 }}>{v.company}</td>
                       <td>{v.role}</td>
-                      <td style={{ fontWeight: 600, color: '#065f46' }}>{v.packageLpa}</td>
+                      <td style={{ fontWeight: 600, color: '#6ee7b7' }}>{v.packageLpa}</td>
                       <td>
                         <span className={`badge ${v.interviewType === 'walk-in' ? 'badge-amber' : 'badge-blue'}`}>
                           {v.interviewType === 'walk-in' ? 'Walk-In' : 'Online'}
@@ -231,6 +239,75 @@ export default function AnalyticsDashboard({ vacancies, tailoredMap, application
                 <tr>
                   <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-soft)', padding: 28 }}>
                     No companies marked as Applied yet. Click <strong>Send to HR</strong> on any vacancy or change its Status to Applied!
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Portfolio Visitors & Likes Tracker */}
+      <div className="card">
+        <div className="card-header">
+          <h3 className="card-title">
+            <Users size={17} color="#7c3aed" /> Who Visited &amp; Liked My Portfolio
+          </h3>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span className="badge badge-blue">
+              <Users size={12} /> {portfolioStats.totalVisitors} Members Visited
+            </span>
+            <span className="badge badge-purple">
+              <Heart size={12} /> {portfolioStats.totalLikes} Liked Profile
+            </span>
+          </div>
+        </div>
+        <div className="table-wrapper">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Visitor / Name</th>
+                <th>Company</th>
+                <th>Device &amp; Browser</th>
+                <th>Region / Timezone</th>
+                <th>Referrer</th>
+                <th>Liked</th>
+                <th>Visits</th>
+                <th>Last Visited</th>
+              </tr>
+            </thead>
+            <tbody>
+              {portfolioVisitors.length ? (
+                portfolioVisitors.map((vis) => (
+                  <tr key={vis.visitorId}>
+                    <td style={{ fontWeight: 700 }}>
+                      {vis.visitorName || <span style={{ color: 'var(--text-soft)', fontWeight: 500 }}>Guest ({vis.visitorId.slice(0, 12)})</span>}
+                    </td>
+                    <td>{vis.visitorCompany || '—'}</td>
+                    <td style={{ fontSize: 12 }}>{vis.deviceSummary || 'Web Browser'}</td>
+                    <td style={{ fontSize: 12 }}>
+                      {[vis.ipRegion, vis.timezone].filter(Boolean).join(' • ') || '—'}
+                    </td>
+                    <td style={{ fontSize: 12, color: 'var(--text-soft)' }}>
+                      {vis.referrer || 'Direct'}
+                    </td>
+                    <td>
+                      {vis.liked ? (
+                        <span className="badge badge-purple">♥ Liked</span>
+                      ) : (
+                        <span className="badge badge-slate">Viewed</span>
+                      )}
+                    </td>
+                    <td className="mono" style={{ fontSize: 12 }}>{vis.visitCount}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-soft)' }}>
+                      {vis.lastVisitedAt ? new Date(vis.lastVisitedAt).toLocaleString() : '—'}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-soft)', padding: 28 }}>
+                    No public portfolio visits logged yet.
                   </td>
                 </tr>
               )}

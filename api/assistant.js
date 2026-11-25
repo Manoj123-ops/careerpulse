@@ -1,4 +1,5 @@
 import { setCorsHeaders, parseRequestBody } from './_smtp.js';
+import { requireAdmin } from './_auth.js';
 import { appendAssistantMessage, resetAssistantMessages } from './_db.js';
 
 export default async function handler(req, res) {
@@ -6,6 +7,8 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
   }
+  if (!requireAdmin(req, res)) return;
+
   try {
     if (req.method === 'POST') {
       const body = parseRequestBody(req);

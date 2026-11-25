@@ -21,23 +21,32 @@ import {
   Trash2,
   Database,
   RefreshCw,
+  LogOut,
+  Eye,
+  Camera,
+  Globe,
 } from 'lucide-react';
 import { GEMINI_MODELS, DEFAULT_MODEL_ID } from './data/models.js';
 import { DEFAULT_CV, cvToPlainText } from './data/defaultCv.js';
+import { DEFAULT_SITE_CONTENT } from './data/defaultSiteContent.js';
 import { generateTailoredCv } from './services/geminiService.js';
 import { downloadCvPdf, downloadCvTxt } from './utils/cvPdf.js';
-import { apiRequest } from './utils/apiClient.js';
+import { compressPortraitFile } from './utils/imageResize.js';
+import { apiRequest, setAdminToken } from './utils/apiClient.js';
 import {
   parseVacanciesCsv,
   generateSampleCsv,
   buildDeepAnalysisPrompt,
 } from './utils/csvParser.js';
+import PublicPortfolio from './components/PublicPortfolio.jsx';
+import AdminLoginModal from './components/AdminLoginModal.jsx';
 import ConfigModal from './components/ConfigModal.jsx';
 import VacancyTable from './components/VacancyTable.jsx';
 import CvEditorModal from './components/CvEditorModal.jsx';
 import SendHrModal from './components/SendHrModal.jsx';
 import AnalyticsDashboard from './components/AnalyticsDashboard.jsx';
 import JobAssistantChat from './components/JobAssistantChat.jsx';
+import SiteContentManager from './components/SiteContentManager.jsx';
 
 function useLocalStorage(key, initialValue) {
   const [value, setValue] = useState(() => {
@@ -61,6 +70,10 @@ function useLocalStorage(key, initialValue) {
 }
 
 export default function App() {
+  const [authChecked, setAuthChecked] = useState(false);
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [viewMode, setViewMode] = useState('portfolio'); // 'portfolio' | 'admin'
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('vacancies');
 
   // Config state
@@ -76,12 +89,20 @@ export default function App() {
     fromName: DEFAULT_CV.fullName,
   });
 
-  // Core data state (cached in localStorage & synchronized with Neon PostgreSQL)
-  const [baseCv, setBaseCv] = useLocalStorage('cp_base_cv', DEFAULT_CV);
-  const [vacancies, setVacancies] = useLocalStorage('cp_vacancies', []);
-  const [tailoredMap, setTailoredMap] = useLocalStorage('cp_tailored_cvs', {});
-  const [applicationLogs, setApplicationLogs] = useLocalStorage('cp_app_logs', []);
+  // Core data state (hydrated from Neon PostgreSQL upon admin login)
+  const [baseCv, setBaseCv] = useState(DEFAULT_CV);
+  const [siteContent, setSiteContent] = useState(DEFAULT_SITE_CONTENT);
+  const [profilePhoto, setProfilePhoto] = useState('');
+  const [silhouettePhoto, setSilhouettePhoto] = useState('');
+  const [editorialPhoto, setEditorialPhoto] = useState('');
+  const [initialEngagement, setInitialEngagement] = useState({ totalVisitors: 0, totalLikes: 0, recentVisitors: [] });
+  const [portfolioVisitors, setPortfolioVisitors] = useState([]);
+  const [portfolioStats, setPortfolioStats] = useState({ totalVisitors: 0, totalLikes: 0 });
+  const [vacancies, setVacancies] = useState([]);
+  const [tailoredMap, setTailoredMap] = useState({});
+  const [applicationLogs, setApplicationLogs] = useState([]);
   const [assistantMessages, setAssistantMessages] = useState([]);
+  const photoInputRef = useRef(null);
 
   // Neon DB connection status
   const [dbStatus, setDbStatus] = useState('connecting'); // 'connecting' | 'connected' | 'error'
@@ -149,10 +170,24 @@ export default function App() {
       if (state.selectedModel) {
         setSelectedModel(state.selectedModel);
       }
+      if (state.profilePhoto !== undefined) {
+        setProfilePhoto(state.profilePhoto || '');
+      }
+      if (state.siteContent) {
+        setSiteContent(state.siteContent);
+      }
+      if (state.silhouettePhoto !== undefined) {
+        setSilhouettePhoto(state.silhouettePhoto || '');
+      }
+      if (state.editorialPhoto !== undefined) {
+        setEditorialPhoto(state.editorialPhoto || '');
+      }
       setVacancies(state.vacancies || []);
       setTailoredMap(state.tailoredMap || {});
       setApplicationLogs(state.applicationLogs || []);
       setAssistantMessages(state.assistantMessages || []);
+      setPortfolioVisitors(state.portfolioVisitors || []);
+      setPortfolioStats(state.portfolioStats || { totalVisitors: 0, totalLikes: 0 });
       setDbStatus('connected');
       if (showFeedback) {
         showToast('Synced latest data from Neon PostgreSQL.');
@@ -167,9 +202,70 @@ export default function App() {
   }, [setApplicationLogs, setBaseCv, setSelectedModel, setTailoredMap, setVacancies, showToast]);
 
   useEffect(() => {
-    syncFromNeonDb(false);
+    let active = true;
+    (async () => {
+      try {
+        const [pubRes, authRes] = await Promise.all([
+          apiRequest('/api/public-portfolio').catch(() => ({ baseCv: null })),
+          apiRequest('/api/auth').catch(() => ({ authenticated: false })),
+        ]);
+        if (!active) return;
+        if (pubRes?.baseCv) {
+          setBaseCv(pubRes.baseCv);
+        }
+        if (pubRes?.profilePhoto !== undefined) {
+          setProfilePhoto(pubRes.profilePhoto || '');
+        }
+        if (pubRes?.siteContent) {
+          setSiteContent(pubRes.siteContent);
+        }
+        if (pubRes?.silhouettePhoto !== undefined) {
+          setSilhouettePhoto(pubRes.silhouettePhoto || '');
+        }
+        if (pubRes?.editorialPhoto !== undefined) {
+          setEditorialPhoto(pubRes.editorialPhoto || '');
+        }
+        if (pubRes?.engagement) {
+          setInitialEngagement(pubRes.engagement);
+        }
+        if (authRes?.authenticated) {
+          setIsAdminAuthenticated(true);
+          setViewMode('admin');
+          syncFromNeonDb(false);
+        }
+      } finally {
+        if (active) setAuthChecked(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleAdminLoginSuccess = () => {
+    setIsAdminAuthenticated(true);
+    setLoginModalOpen(false);
+    setViewMode('admin');
+    syncFromNeonDb(false);
+    showToast('Welcome back, Manoj Kumar PR!');
+  };
+
+  const handleAdminLogout = async () => {
+    try {
+      await apiRequest('/api/auth', { method: 'DELETE' });
+    } catch {
+      // ignore
+    }
+    setAdminToken('');
+    setIsAdminAuthenticated(false);
+    setViewMode('portfolio');
+    setVacancies([]);
+    setTailoredMap({});
+    setApplicationLogs([]);
+    setAssistantMessages([]);
+    showToast('Signed out of Admin Portal.');
+  };
 
   const allModels = useMemo(() => [...GEMINI_MODELS, ...(extraModels || [])], [extraModels]);
 
@@ -267,7 +363,7 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'CareerPulse_Deep_Analysis_Template.csv';
+    a.download = 'Manoj_Kumar_Portal_Deep_Analysis_Template.csv';
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -514,6 +610,67 @@ export default function App() {
     }
   };
 
+  const handleProfilePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = await compressPortraitFile(file, 1080);
+      setProfilePhoto(dataUrl);
+      await apiRequest('/api/profile', {
+        method: 'PUT',
+        body: { profilePhoto: dataUrl },
+      });
+      showToast('Profile picture updated & saved to Neon DB!');
+    } catch (err) {
+      showToast(err?.message || 'Failed to update profile picture.', 'error');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleResetProfilePhoto = async () => {
+    setProfilePhoto('');
+    try {
+      await apiRequest('/api/profile', {
+        method: 'PUT',
+        body: { profilePhoto: '' },
+      });
+      showToast('Reset to default studio portrait.');
+    } catch (err) {
+      showToast(err?.message || 'Failed to reset portrait in Neon DB.', 'error');
+    }
+  };
+
+  const handleSaveCms = async (payload) => {
+    if (payload.siteContent !== undefined) setSiteContent(payload.siteContent);
+    if (payload.profilePhoto !== undefined) setProfilePhoto(payload.profilePhoto);
+    if (payload.silhouettePhoto !== undefined) setSilhouettePhoto(payload.silhouettePhoto);
+    if (payload.editorialPhoto !== undefined) setEditorialPhoto(payload.editorialPhoto);
+
+    try {
+      await apiRequest('/api/profile', {
+        method: 'PUT',
+        body: payload,
+      });
+      showToast('Website CMS changes saved & live in Neon DB!');
+    } catch (err) {
+      showToast(err?.message || 'Failed to persist CMS changes to Neon DB.', 'error');
+    }
+  };
+
+  const handleResetCms = async () => {
+    setSiteContent(DEFAULT_SITE_CONTENT);
+    try {
+      await apiRequest('/api/profile', {
+        method: 'PUT',
+        body: { siteContent: DEFAULT_SITE_CONTENT },
+      });
+      showToast('Reset Website CMS copy to defaults.');
+    } catch (err) {
+      showToast(err?.message || 'Failed to reset Website CMS copy.', 'error');
+    }
+  };
+
   const handlePersistAssistantMsg = async (msg) => {
     setAssistantMessages((prev) => [...prev, msg]);
     try {
@@ -571,7 +728,7 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `CareerPulse_Vacancies_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `Manoj_Kumar_Portal_Vacancies_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -579,6 +736,56 @@ export default function App() {
   const currentEditorCv = editorState.vacancy
     ? tailoredMap[editorState.vacancy.id]?.tailoredCv || baseCv
     : baseCv;
+
+  if (!isAdminAuthenticated || viewMode === 'portfolio') {
+    return (
+      <>
+        <PublicPortfolio
+          cv={baseCv}
+          siteContent={siteContent}
+          profilePhoto={profilePhoto}
+          silhouettePhoto={silhouettePhoto}
+          editorialPhoto={editorialPhoto}
+          initialEngagement={initialEngagement}
+          isAdminAuthenticated={isAdminAuthenticated}
+          onOpenAdminLogin={() => setLoginModalOpen(true)}
+          onEnterAdminPortal={() => {
+            setViewMode('admin');
+            syncFromNeonDb(false);
+          }}
+        />
+        <AdminLoginModal
+          isOpen={loginModalOpen}
+          onClose={() => setLoginModalOpen(false)}
+          onLoginSuccess={handleAdminLoginSuccess}
+        />
+        {toast && (
+          <div
+            style={{
+              position: 'fixed',
+              bottom: 20,
+              right: 20,
+              zIndex: 80,
+              padding: '11px 16px',
+              borderRadius: 10,
+              background: toast.type === 'error' ? '#991b1b' : '#0f172a',
+              color: '#fff',
+              fontSize: 13,
+              fontWeight: 600,
+              boxShadow: 'var(--shadow-lg)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            {toast.type === 'error' ? <AlertCircle size={16} /> : <CheckCircle2 size={16} color="#34d399" />}
+            {toast.msg}
+          </div>
+        )}
+        {!authChecked && null}
+      </>
+    );
+  }
 
   return (
     <div className="app-shell">
@@ -589,8 +796,8 @@ export default function App() {
             <Briefcase size={20} />
           </div>
           <div>
-            <h1>CareerPulse AI</h1>
-            <p>Neon PostgreSQL Cloud Sync • CSV Tracker • AI Resume Modifier • Direct HR Sender</p>
+            <h1>Manoj Kumar Portal</h1>
+            <p>Website CMS • Neon PostgreSQL Cloud Sync • CSV Tracker • AI Resume Modifier • Direct HR Sender</p>
           </div>
         </div>
 
@@ -618,6 +825,12 @@ export default function App() {
             onClick={() => setActiveTab('cv')}
           >
             <FileText size={14} /> My Base CV
+          </button>
+          <button
+            className={`nav-tab ${activeTab === 'cms' ? 'active' : ''}`}
+            onClick={() => setActiveTab('cms')}
+          >
+            <Globe size={14} /> Website CMS
           </button>
         </nav>
 
@@ -668,6 +881,14 @@ export default function App() {
           <button className="btn btn-outline btn-sm" onClick={() => setConfigOpen(true)}>
             <Settings size={14} /> Config & Models
           </button>
+
+          <button className="btn btn-outline btn-sm" onClick={() => setViewMode('portfolio')}>
+            <Eye size={14} /> Public Portfolio
+          </button>
+
+          <button className="btn btn-danger-outline btn-sm" onClick={handleAdminLogout}>
+            <LogOut size={14} /> Logout
+          </button>
         </div>
       </header>
 
@@ -680,7 +901,8 @@ export default function App() {
             zIndex: 80,
             padding: '11px 16px',
             borderRadius: 10,
-            background: toast.type === 'error' ? '#991b1b' : '#0f172a',
+            background: toast.type === 'error' ? '#991b1b' : '#111118',
+            border: toast.type === 'error' ? '1px solid #f87171' : '1px solid rgba(229, 9, 20, 0.5)',
             color: '#fff',
             fontSize: 13,
             fontWeight: 600,
@@ -703,7 +925,7 @@ export default function App() {
               <div className="kpi-card">
                 <div>
                   <div className="kpi-label">Companies Applied</div>
-                  <div className="kpi-value" style={{ color: '#2563eb' }}>{appliedCount}</div>
+                  <div className="kpi-value" style={{ color: '#ff4d5a' }}>{appliedCount}</div>
                   <div className="kpi-sub">Synced with Neon DB</div>
                 </div>
                 <span className="badge badge-blue">Applied</span>
@@ -721,7 +943,7 @@ export default function App() {
               <div className="kpi-card">
                 <div>
                   <div className="kpi-label">Tailored CVs Ready</div>
-                  <div className="kpi-value" style={{ color: '#7c3aed' }}>
+                  <div className="kpi-value" style={{ color: '#c084fc' }}>
                     {Object.keys(tailoredMap).length}
                   </div>
                   <div className="kpi-sub">AI-modified from your Base CV</div>
@@ -731,7 +953,7 @@ export default function App() {
               <div className="kpi-card">
                 <div>
                   <div className="kpi-label">Active Gemini Model</div>
-                  <div className="kpi-value mono" style={{ fontSize: 15, marginTop: 10, color: '#059669' }}>
+                  <div className="kpi-value mono" style={{ fontSize: 15, marginTop: 10, color: '#34d399' }}>
                     {selectedModel}
                   </div>
                   <div className="kpi-sub">Used for CV Modification & Assistant</div>
@@ -745,7 +967,7 @@ export default function App() {
               <div className="card-header">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   <h2 className="card-title">
-                    <FileSpreadsheet size={18} color="#2563eb" /> Import Deep-Analyzed Vacancy CSV
+                    <FileSpreadsheet size={18} color="#e50914" /> Import Deep-Analyzed Vacancy CSV
                   </h2>
                   <span className="badge badge-blue">Step 1: Copy Prompt → Step 2: Upload CSV → Step 3: Generate AI CV</span>
                 </div>
@@ -852,10 +1074,10 @@ export default function App() {
                 {showPromptPanel && (
                   <div
                     style={{
-                      border: '1px solid #c7d2fe',
-                      borderRadius: 10,
+                      border: '1px solid rgba(168, 85, 247, 0.35)',
+                      borderRadius: 12,
                       padding: 16,
-                      background: '#f5f7ff',
+                      background: 'rgba(168, 85, 247, 0.08)',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: 12,
@@ -863,10 +1085,10 @@ export default function App() {
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: '#1e1b4b' }}>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: '#ffffff' }}>
                           Deep Data Analysis Prompt (Outputs Exact CSV for This App)
                         </div>
-                        <div style={{ fontSize: 12, color: '#4338ca', marginTop: 2 }}>
+                        <div style={{ fontSize: 12, color: '#d8b4fe', marginTop: 2 }}>
                           Copy this prompt into Gemini Deep Research / ChatGPT / Perplexity, save the output as <span className="mono">.csv</span>, and upload it above.
                         </div>
                       </div>
@@ -908,7 +1130,7 @@ export default function App() {
                       rows={9}
                       readOnly
                       value={deepAnalysisPrompt}
-                      style={{ fontSize: 11.5, background: '#fff' }}
+                      style={{ fontSize: 11.5, background: 'rgba(5, 5, 9, 0.9)' }}
                     />
                   </div>
                 )}
@@ -1103,6 +1325,8 @@ export default function App() {
             vacancies={vacancies}
             tailoredMap={tailoredMap}
             applicationLogs={applicationLogs}
+            portfolioVisitors={portfolioVisitors}
+            portfolioStats={portfolioStats}
           />
         )}
 
@@ -1118,13 +1342,80 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'cms' && (
+          <SiteContentManager
+            siteContent={siteContent}
+            profilePhoto={profilePhoto}
+            silhouettePhoto={silhouettePhoto}
+            editorialPhoto={editorialPhoto}
+            onSaveCms={handleSaveCms}
+            onResetCms={handleResetCms}
+          />
+        )}
+
         {activeTab === 'cv' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div className="card">
               <div className="card-header">
                 <div>
                   <h2 className="card-title">
-                    <FileText size={18} color="#2563eb" /> My Existing Base CV ({baseCv.fullName})
+                    <Camera size={18} color="#e50914" /> Public Portfolio Profile Picture
+                  </h2>
+                  <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--text-soft)' }}>
+                    Upload any custom photo to replace your portrait across the public portfolio Hero &amp; 3D Developer ID Card (saved in Neon DB).
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={handleProfilePhotoUpload}
+                  />
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => photoInputRef.current?.click()}
+                  >
+                    <Upload size={14} /> Upload New Photo
+                  </button>
+                  {profilePhoto && (
+                    <button className="btn btn-outline btn-sm" onClick={handleResetProfilePhoto}>
+                      <RotateCcw size={14} /> Reset to Studio Default
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+                <img
+                  src={profilePhoto || '/portrait-cutout.png'}
+                  alt="Active Portfolio Portrait"
+                  style={{
+                    width: 86,
+                    height: 108,
+                    objectFit: 'cover',
+                    objectPosition: 'top',
+                    borderRadius: 10,
+                    border: '2px solid #e2e8f0',
+                  }}
+                />
+                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                  <div>
+                    <strong>Active Portrait:</strong>{' '}
+                    {profilePhoto ? 'Custom Uploaded Photo (Synced to Neon DB)' : 'HD Studio Neo-Noir Portrait (Default)'}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-soft)', marginTop: 4 }}>
+                    Supports JPG, PNG, and WebP. Automatically optimized for crisp 4:5 HD rendering.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-header">
+                <div>
+                  <h2 className="card-title">
+                    <FileText size={18} color="#e50914" /> My Existing Base CV ({baseCv.fullName})
                   </h2>
                   <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--text-soft)' }}>
                     Stored in Neon PostgreSQL. Every company-specific &quot;Generate CV&quot; modifies this base CV with Gemini AI.

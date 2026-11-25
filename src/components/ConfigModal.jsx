@@ -218,7 +218,7 @@ export default function ConfigModal({
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Sparkles size={15} color="#2563eb" /> Select Active Latest Gemini Model
+                    <Sparkles size={15} color="#e50914" /> Select Active Latest Gemini Model
                   </h4>
                   <span className="badge badge-blue mono">Selected: {selectedModel}</span>
                 </div>
@@ -236,7 +236,7 @@ export default function ConfigModal({
                           <div>
                             <div style={{ fontWeight: 700, fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 6 }}>
                               {model.name}
-                              {isSelected && <CheckCircle2 size={14} color="#2563eb" />}
+                              {isSelected && <CheckCircle2 size={14} color="#e50914" />}
                             </div>
                             <div className="mono" style={{ fontSize: 11.5, color: 'var(--primary)', marginTop: 2 }}>
                               {model.id}
@@ -275,12 +275,12 @@ export default function ConfigModal({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div
                 style={{
-                  background: '#eff6ff',
-                  border: '1px solid #bfdbfe',
+                  background: 'rgba(168, 85, 247, 0.1)',
+                  border: '1px solid rgba(168, 85, 247, 0.35)',
                   borderRadius: 10,
                   padding: 14,
                   fontSize: 12.5,
-                  color: '#1e3a8a',
+                  color: '#e9d5ff',
                 }}
               >
                 <strong>Two ways to send your tailored CV directly to HR:</strong>
@@ -289,7 +289,7 @@ export default function ConfigModal({
                     <strong>Instant Gmail / Default Mail App (Zero Setup):</strong> Always available in the Send to HR modal — opens pre-filled email + auto-downloads your tailored PDF.
                   </li>
                   <li>
-                    <strong>Direct In-App SMTP Delivery (Auto-Attaches Tailored PDF):</strong> Configure your Gmail + 16-character Google App Password (or any SMTP server) below so CareerPulse sends emails with the PDF attached directly via the backend API (Vercel Serverless or local dev).
+                    <strong>Direct In-App SMTP Delivery (Auto-Attaches Tailored PDF):</strong> Configure your Gmail + 16-character Google App Password (or any SMTP server) below so Manoj Kumar Portal sends emails with the PDF attached directly via the backend API (Vercel Serverless or local dev).
                   </li>
                 </ul>
               </div>

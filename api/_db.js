@@ -43,8 +43,29 @@ export async function ensureSchema() {
         id TEXT PRIMARY KEY,
         base_cv JSONB NOT NULL,
         selected_model TEXT NOT NULL DEFAULT 'gemini-4-hydrogen',
+        profile_photo TEXT DEFAULT '',
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
+    `);
+
+    await db.query(`
+      ALTER TABLE app_settings
+      ADD COLUMN IF NOT EXISTS profile_photo TEXT DEFAULT ''
+    `);
+
+    await db.query(`
+      ALTER TABLE app_settings
+      ADD COLUMN IF NOT EXISTS site_content JSONB
+    `);
+
+    await db.query(`
+      ALTER TABLE app_settings
+      ADD COLUMN IF NOT EXISTS silhouette_photo TEXT DEFAULT ''
+    `);
+
+    await db.query(`
+      ALTER TABLE app_settings
+      ADD COLUMN IF NOT EXISTS editorial_photo TEXT DEFAULT ''
     `);
 
     await db.query(`
@@ -114,6 +135,39 @@ export async function ensureSchema() {
       )
     `);
 
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS portfolio_visitors (
+        visitor_id TEXT PRIMARY KEY,
+        visitor_name TEXT DEFAULT '',
+        visitor_company TEXT DEFAULT '',
+        visitor_role TEXT DEFAULT '',
+        device_summary TEXT DEFAULT '',
+        timezone TEXT DEFAULT '',
+        browser_lang TEXT DEFAULT '',
+        referrer TEXT DEFAULT '',
+        ip_region TEXT DEFAULT '',
+        liked BOOLEAN NOT NULL DEFAULT FALSE,
+        visit_count INTEGER NOT NULL DEFAULT 1,
+        first_visited_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        last_visited_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        liked_at TIMESTAMPTZ
+      )
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS admin_saved_logins (
+        device_id TEXT PRIMARY KEY,
+        username TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        password_enc TEXT NOT NULL,
+        iv TEXT NOT NULL,
+        auth_tag TEXT NOT NULL,
+        user_agent TEXT DEFAULT '',
+        last_used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
     schemaInitialized = true;
   })();
 
@@ -167,12 +221,16 @@ export async function getFullState() {
   const db = getPool();
   await ensureSchema();
 
-  const [settingsRes, vacancyRes, tailoredRes, logRes, msgRes] = await Promise.all([
-    db.query(`SELECT base_cv, selected_model, updated_at FROM app_settings WHERE id = 'default' LIMIT 1`),
+  const [settingsRes, vacancyRes, tailoredRes, logRes, msgRes, visitorRes] = await Promise.all([
+    db.query(
+      `SELECT base_cv, selected_model, profile_photo, site_content, silhouette_photo, editorial_photo, updated_at
+       FROM app_settings WHERE id = 'default' LIMIT 1`
+    ),
     db.query(`SELECT * FROM vacancies ORDER BY created_at DESC`),
     db.query(`SELECT * FROM tailored_cvs`),
     db.query(`SELECT * FROM application_logs ORDER BY created_at ASC`),
     db.query(`SELECT id, role, text, created_at FROM assistant_messages ORDER BY id ASC LIMIT 60`),
+    db.query(`SELECT * FROM portfolio_visitors ORDER BY last_visited_at DESC LIMIT 200`),
   ]);
 
   const tailoredMap = {};
@@ -188,10 +246,38 @@ export async function getFullState() {
     };
   }
 
+  const portfolioVisitors = visitorRes.rows.map((v) => ({
+    visitorId: v.visitor_id,
+    visitorName: v.visitor_name || '',
+    visitorCompany: v.visitor_company || '',
+    visitorRole: v.visitor_role || '',
+    deviceSummary: v.device_summary || '',
+    timezone: v.timezone || '',
+    browserLang: v.browser_lang || '',
+    referrer: v.referrer || '',
+    ipRegion: v.ip_region || '',
+    liked: Boolean(v.liked),
+    visitCount: Number(v.visit_count) || 1,
+    firstVisitedAt: v.first_visited_at ? new Date(v.first_visited_at).toISOString() : undefined,
+    lastVisitedAt: v.last_visited_at ? new Date(v.last_visited_at).toISOString() : undefined,
+    likedAt: v.liked_at ? new Date(v.liked_at).toISOString() : undefined,
+  }));
+
+  const statsRes = await db.query(`
+    SELECT
+      COUNT(*)::int AS total_visitors,
+      COUNT(*) FILTER (WHERE liked = TRUE)::int AS total_likes
+    FROM portfolio_visitors
+  `);
+
   return {
     ok: true,
     baseCv: settingsRes.rows[0]?.base_cv || null,
     selectedModel: settingsRes.rows[0]?.selected_model || null,
+    profilePhoto: settingsRes.rows[0]?.profile_photo || '',
+    siteContent: settingsRes.rows[0]?.site_content || null,
+    silhouettePhoto: settingsRes.rows[0]?.silhouette_photo || '',
+    editorialPhoto: settingsRes.rows[0]?.editorial_photo || '',
     vacancies: vacancyRes.rows.map(mapVacancyRow),
     tailoredMap,
     applicationLogs: logRes.rows.map((l) => ({
@@ -210,37 +296,84 @@ export async function getFullState() {
       text: m.text,
       createdAt: m.created_at ? new Date(m.created_at).toISOString() : undefined,
     })),
+    portfolioVisitors,
+    portfolioStats: {
+      totalVisitors: Number(statsRes.rows[0]?.total_visitors) || 0,
+      totalLikes: Number(statsRes.rows[0]?.total_likes) || 0,
+    },
   };
 }
 
-export async function saveProfileSettings({ baseCv, selectedModel }) {
+export async function saveProfileSettings({
+  baseCv,
+  selectedModel,
+  profilePhoto,
+  siteContent,
+  silhouettePhoto,
+  editorialPhoto,
+}) {
   const db = getPool();
   await ensureSchema();
 
-  if (baseCv && selectedModel) {
+  if (baseCv !== undefined) {
     await db.query(
-      `INSERT INTO app_settings (id, base_cv, selected_model, updated_at)
-       VALUES ('default', $1::jsonb, $2, NOW())
+      `INSERT INTO app_settings (
+         id, base_cv, selected_model, profile_photo, site_content, silhouette_photo, editorial_photo, updated_at
+       )
+       VALUES ('default', $1::jsonb, $2, $3, $4::jsonb, $5, $6, NOW())
        ON CONFLICT (id) DO UPDATE SET
          base_cv = EXCLUDED.base_cv,
-         selected_model = EXCLUDED.selected_model,
+         selected_model = COALESCE($7, app_settings.selected_model),
+         profile_photo = COALESCE($8, app_settings.profile_photo),
+         site_content = COALESCE($9::jsonb, app_settings.site_content),
+         silhouette_photo = COALESCE($10, app_settings.silhouette_photo),
+         editorial_photo = COALESCE($11, app_settings.editorial_photo),
          updated_at = NOW()`,
-      [JSON.stringify(baseCv), selectedModel]
+      [
+        JSON.stringify(baseCv),
+        selectedModel || 'gemini-4-hydrogen',
+        profilePhoto !== undefined ? profilePhoto : '',
+        siteContent !== undefined ? JSON.stringify(siteContent) : null,
+        silhouettePhoto !== undefined ? silhouettePhoto : '',
+        editorialPhoto !== undefined ? editorialPhoto : '',
+        selectedModel || null,
+        profilePhoto !== undefined ? profilePhoto : null,
+        siteContent !== undefined ? JSON.stringify(siteContent) : null,
+        silhouettePhoto !== undefined ? silhouettePhoto : null,
+        editorialPhoto !== undefined ? editorialPhoto : null,
+      ]
     );
-  } else if (baseCv) {
-    await db.query(
-      `INSERT INTO app_settings (id, base_cv, selected_model, updated_at)
-       VALUES ('default', $1::jsonb, 'gemini-4-hydrogen', NOW())
-       ON CONFLICT (id) DO UPDATE SET
-         base_cv = EXCLUDED.base_cv,
-         updated_at = NOW()`,
-      [JSON.stringify(baseCv)]
-    );
-  } else if (selectedModel) {
-    await db.query(
-      `UPDATE app_settings SET selected_model = $1, updated_at = NOW() WHERE id = 'default'`,
-      [selectedModel]
-    );
+  } else {
+    if (selectedModel !== undefined) {
+      await db.query(
+        `UPDATE app_settings SET selected_model = $1, updated_at = NOW() WHERE id = 'default'`,
+        [selectedModel]
+      );
+    }
+    if (profilePhoto !== undefined) {
+      await db.query(
+        `UPDATE app_settings SET profile_photo = $1, updated_at = NOW() WHERE id = 'default'`,
+        [profilePhoto]
+      );
+    }
+    if (siteContent !== undefined) {
+      await db.query(
+        `UPDATE app_settings SET site_content = $1::jsonb, updated_at = NOW() WHERE id = 'default'`,
+        [siteContent === null ? null : JSON.stringify(siteContent)]
+      );
+    }
+    if (silhouettePhoto !== undefined) {
+      await db.query(
+        `UPDATE app_settings SET silhouette_photo = $1, updated_at = NOW() WHERE id = 'default'`,
+        [silhouettePhoto]
+      );
+    }
+    if (editorialPhoto !== undefined) {
+      await db.query(
+        `UPDATE app_settings SET editorial_photo = $1, updated_at = NOW() WHERE id = 'default'`,
+        [editorialPhoto]
+      );
+    }
   }
 
   return { ok: true };
@@ -440,5 +573,184 @@ export async function resetAssistantMessages() {
   const db = getPool();
   await ensureSchema();
   await db.query(`DELETE FROM assistant_messages`);
+  return { ok: true };
+}
+
+export async function getPublicEngagementSummary() {
+  const db = getPool();
+  await ensureSchema();
+  const [countsRes, recentRes] = await Promise.all([
+    db.query(`
+      SELECT
+        COUNT(*)::int AS total_visitors,
+        COUNT(*) FILTER (WHERE liked = TRUE)::int AS total_likes
+      FROM portfolio_visitors
+    `),
+    db.query(`
+      SELECT visitor_name, visitor_company, visitor_role, liked, ip_region, device_summary, last_visited_at
+      FROM portfolio_visitors
+      ORDER BY last_visited_at DESC
+      LIMIT 12
+    `),
+  ]);
+
+  return {
+    totalVisitors: Number(countsRes.rows[0]?.total_visitors) || 0,
+    totalLikes: Number(countsRes.rows[0]?.total_likes) || 0,
+    recentVisitors: recentRes.rows.map((r) => ({
+      visitorName: r.visitor_name || '',
+      visitorCompany: r.visitor_company || '',
+      visitorRole: r.visitor_role || '',
+      liked: Boolean(r.liked),
+      ipRegion: r.ip_region || '',
+      deviceSummary: r.device_summary || '',
+      lastVisitedAt: r.last_visited_at ? new Date(r.last_visited_at).toISOString() : undefined,
+    })),
+  };
+}
+
+export async function recordPortfolioEngagement({
+  visitorId,
+  action = 'visit',
+  visitorName,
+  visitorCompany,
+  visitorRole,
+  deviceSummary,
+  timezone,
+  browserLang,
+  referrer,
+  ipRegion,
+}) {
+  const db = getPool();
+  await ensureSchema();
+
+  const cleanId = String(visitorId || '').slice(0, 120) || `anon_${Date.now()}`;
+  const isLikeAction = action === 'like';
+  const isUnlikeAction = action === 'unlike';
+
+  await db.query(
+    `INSERT INTO portfolio_visitors (
+      visitor_id, visitor_name, visitor_company, visitor_role,
+      device_summary, timezone, browser_lang, referrer, ip_region,
+      liked, visit_count, first_visited_at, last_visited_at, liked_at
+    ) VALUES (
+      $1, $2, $3, $4,
+      $5, $6, $7, $8, $9,
+      $10, 1, NOW(), NOW(), $11
+    )
+    ON CONFLICT (visitor_id) DO UPDATE SET
+      visitor_name = CASE WHEN $2 <> '' THEN $2 ELSE portfolio_visitors.visitor_name END,
+      visitor_company = CASE WHEN $3 <> '' THEN $3 ELSE portfolio_visitors.visitor_company END,
+      visitor_role = CASE WHEN $4 <> '' THEN $4 ELSE portfolio_visitors.visitor_role END,
+      device_summary = CASE WHEN $5 <> '' THEN $5 ELSE portfolio_visitors.device_summary END,
+      timezone = CASE WHEN $6 <> '' THEN $6 ELSE portfolio_visitors.timezone END,
+      browser_lang = CASE WHEN $7 <> '' THEN $7 ELSE portfolio_visitors.browser_lang END,
+      referrer = CASE WHEN $8 <> '' THEN $8 ELSE portfolio_visitors.referrer END,
+      ip_region = CASE WHEN $9 <> '' THEN $9 ELSE portfolio_visitors.ip_region END,
+      visit_count = CASE WHEN $12 = 'visit' THEN portfolio_visitors.visit_count + 1 ELSE portfolio_visitors.visit_count END,
+      liked = CASE
+        WHEN $12 = 'like' THEN TRUE
+        WHEN $12 = 'unlike' THEN FALSE
+        ELSE portfolio_visitors.liked
+      END,
+      liked_at = CASE
+        WHEN $12 = 'like' THEN COALESCE(portfolio_visitors.liked_at, NOW())
+        WHEN $12 = 'unlike' THEN NULL
+        ELSE portfolio_visitors.liked_at
+      END,
+      last_visited_at = NOW()`,
+    [
+      cleanId,
+      String(visitorName || '').trim().slice(0, 100),
+      String(visitorCompany || '').trim().slice(0, 100),
+      String(visitorRole || '').trim().slice(0, 100),
+      String(deviceSummary || '').trim().slice(0, 140),
+      String(timezone || '').trim().slice(0, 80),
+      String(browserLang || '').trim().slice(0, 40),
+      String(referrer || '').trim().slice(0, 200),
+      String(ipRegion || '').trim().slice(0, 100),
+      isLikeAction,
+      isLikeAction ? new Date().toISOString() : null,
+      isUnlikeAction ? 'unlike' : action,
+    ]
+  );
+
+  const summary = await getPublicEngagementSummary();
+  const selfRow = await db.query(
+    `SELECT liked, visitor_name, visitor_company FROM portfolio_visitors WHERE visitor_id = $1 LIMIT 1`,
+    [cleanId]
+  );
+
+  return {
+    ok: true,
+    ...summary,
+    viewerLiked: Boolean(selfRow.rows[0]?.liked),
+    viewerName: selfRow.rows[0]?.visitor_name || '',
+    viewerCompany: selfRow.rows[0]?.visitor_company || '',
+  };
+}
+
+export async function saveRememberedAdminLogin({
+  deviceId,
+  username,
+  passwordHash,
+  passwordEnc,
+  iv,
+  authTag,
+  userAgent,
+}) {
+  const db = getPool();
+  await ensureSchema();
+  await db.query(
+    `INSERT INTO admin_saved_logins (
+      device_id, username, password_hash, password_enc, iv, auth_tag, user_agent, last_used_at, created_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+    ON CONFLICT (device_id) DO UPDATE SET
+      username = EXCLUDED.username,
+      password_hash = EXCLUDED.password_hash,
+      password_enc = EXCLUDED.password_enc,
+      iv = EXCLUDED.iv,
+      auth_tag = EXCLUDED.auth_tag,
+      user_agent = EXCLUDED.user_agent,
+      last_used_at = NOW()`,
+    [
+      String(deviceId),
+      String(username || '').trim(),
+      String(passwordHash || ''),
+      String(passwordEnc || ''),
+      String(iv || ''),
+      String(authTag || ''),
+      String(userAgent || '').slice(0, 220),
+    ]
+  );
+  return { ok: true };
+}
+
+export async function getRememberedAdminLogin(deviceId) {
+  if (!deviceId) return null;
+  const db = getPool();
+  await ensureSchema();
+  const res = await db.query(
+    `SELECT device_id, username, password_enc, iv, auth_tag, last_used_at
+     FROM admin_saved_logins WHERE device_id = $1 LIMIT 1`,
+    [String(deviceId)]
+  );
+  if (res.rows.length === 0) return null;
+  const row = res.rows[0];
+  return {
+    deviceId: row.device_id,
+    username: row.username,
+    passwordEnc: row.password_enc,
+    iv: row.iv,
+    authTag: row.auth_tag,
+    lastUsedAt: row.last_used_at ? new Date(row.last_used_at).toISOString() : undefined,
+  };
+}
+
+export async function deleteRememberedAdminLogin(deviceId) {
+  if (!deviceId) return { ok: true };
+  const db = getPool();
+  await ensureSchema();
+  await db.query(`DELETE FROM admin_saved_logins WHERE device_id = $1`, [String(deviceId)]);
   return { ok: true };
 }

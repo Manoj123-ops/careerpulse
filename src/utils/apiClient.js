@@ -1,12 +1,41 @@
+const TOKEN_KEY = 'cp_admin_token';
+
+export function getAdminToken() {
+  try {
+    return localStorage.getItem(TOKEN_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+export function setAdminToken(token) {
+  try {
+    if (token) {
+      localStorage.setItem(TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(TOKEN_KEY);
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
+
 export async function apiRequest(url, options = {}) {
   const { method = 'GET', body } = options;
+  const headers = {};
+  const token = getAdminToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const fetchOptions = {
     method,
-    headers: {},
+    headers,
+    credentials: 'include',
   };
 
   if (body !== undefined) {
-    fetchOptions.headers['Content-Type'] = 'application/json';
+    headers['Content-Type'] = 'application/json';
     fetchOptions.body = JSON.stringify(body);
   }
 
@@ -16,7 +45,9 @@ export async function apiRequest(url, options = {}) {
   if (contentType.includes('application/json')) {
     const data = await resp.json();
     if (!resp.ok || data?.ok === false) {
-      throw new Error(data?.error || `Request failed with status ${resp.status}.`);
+      const err = new Error(data?.error || `Request failed with status ${resp.status}.`);
+      err.status = resp.status;
+      throw err;
     }
     return data;
   }

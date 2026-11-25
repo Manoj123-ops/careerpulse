@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import healthHandler from '../api/health.js';
+import authHandler from '../api/auth.js';
+import publicPortfolioHandler from '../api/public-portfolio.js';
 import stateHandler from '../api/state.js';
 import vacanciesHandler from '../api/vacancies.js';
 import tailoredCvHandler from '../api/tailored-cv.js';
@@ -17,6 +19,8 @@ app.use(cors());
 app.use(express.json({ limit: '15mb' }));
 
 app.all('/api/health', healthHandler);
+app.all('/api/auth', authHandler);
+app.all('/api/public-portfolio', publicPortfolioHandler);
 app.all('/api/state', stateHandler);
 app.all('/api/vacancies', vacanciesHandler);
 app.all('/api/tailored-cv', tailoredCvHandler);

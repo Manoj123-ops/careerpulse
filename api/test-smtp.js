@@ -1,10 +1,13 @@
 import { setCorsHeaders, parseRequestBody, verifySmtpConnection } from './_smtp.js';
+import { requireAdmin } from './_auth.js';
 
 export default async function handler(req, res) {
   setCorsHeaders(res);
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
   }
+  if (!requireAdmin(req, res)) return;
+
   if (req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'Method not allowed. Use POST.' });
   }
